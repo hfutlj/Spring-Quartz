@@ -54,22 +54,24 @@ public class JobController {
      * 添加新Job
      */
     @RequestMapping("/addJob")
-    public void addJob(@RequestParam String jobName, @RequestParam String jobClassPath, String jobGroup, @RequestParam String cronExpression, @RequestParam String triggerName, String TriggerGroup) {
+    public void addJob(@RequestParam String jobName, @RequestParam String jobClassPath, String jobGroup,
+                       @RequestParam String cronExpression, @RequestParam String triggerName, String triggerGroup) {
         // 根据Job执行类的全路径获取执行类
         Class<? extends Job> jobClass;
         try {
             jobClass = (Class<? extends Job>) ClassLoader.getSystemClassLoader().loadClass(jobClassPath);
-        } catch (ClassNotFoundException e) {
+        } catch (Exception e) {
             e.printStackTrace();
             return;
         }
         //
         JobBuilder jobBuilder = JobBuilder.newJob(jobClass);
         jobGroup = StringUtils.isEmpty(jobGroup) ? "DEFAULT" : jobGroup;
+        triggerGroup = StringUtils.isEmpty(triggerName) ? "DEFAULT" : triggerGroup;
         JobDetail jobDetail = jobBuilder.withIdentity(jobName, jobGroup).build();
         TriggerBuilder triggerBuilder = TriggerBuilder.newTrigger();
         CronTrigger trigger = (CronTrigger) triggerBuilder
-                .withIdentity(triggerName,TriggerGroup)
+                .withIdentity(triggerName,triggerGroup)
                 .startNow()
                 .withSchedule(CronScheduleBuilder.cronSchedule(cronExpression))
                 .build();
@@ -83,6 +85,8 @@ public class JobController {
     @RequestMapping("/runOnce")
     public void runOnce() {
         try {
+            // 这种触发方式会新建一个SimpleTrigger来触发该job，触发完成后
+            // SimpleTrigger的状态为Complete，当job执行完成后会自动删除这个触发器
             scheduler.triggerJob(JobKey.jobKey("testJob"));
         } catch (SchedulerException e) {
             e.printStackTrace();
