@@ -18,11 +18,6 @@ public class JobController {
     @Autowired
     public Scheduler scheduler;
 
-    @RequestMapping("/test")
-    public void test() {
-        System.out.println("hee");
-    }
-
     public Scheduler getScheduler() {
         return scheduler;
     }
@@ -55,11 +50,11 @@ public class JobController {
      */
     @RequestMapping("/addJob")
     public void addJob(@RequestParam String jobName, @RequestParam String jobClassPath, String jobGroup,
-                       @RequestParam String cronExpression, @RequestParam String triggerName, String triggerGroup) {
+                       @RequestParam String cronString, @RequestParam String triggerName, String triggerGroup) {
         // 根据Job执行类的全路径获取执行类
         Class<? extends Job> jobClass;
         try {
-            jobClass = (Class<? extends Job>) ClassLoader.getSystemClassLoader().loadClass(jobClassPath);
+            jobClass = (Class<? extends Job>) Thread.currentThread().getContextClassLoader().loadClass(jobClassPath);
         } catch (Exception e) {
             e.printStackTrace();
             return;
@@ -71,12 +66,49 @@ public class JobController {
         JobDetail jobDetail = jobBuilder.withIdentity(jobName, jobGroup).build();
         TriggerBuilder triggerBuilder = TriggerBuilder.newTrigger();
         CronTrigger trigger = (CronTrigger) triggerBuilder
-                .withIdentity(triggerName,triggerGroup)
+                .withIdentity(triggerName, triggerGroup)
                 .startNow()
-                .withSchedule(CronScheduleBuilder.cronSchedule(cronExpression))
+                .withSchedule(CronScheduleBuilder.cronSchedule(cronString))
                 .build();
         try {
             scheduler.scheduleJob(jobDetail, trigger);
+        } catch (SchedulerException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @RequestMapping("/deleteJob")
+    public void deleteJob(@RequestParam String jobName, String jobGroup) {
+        jobGroup = StringUtils.isEmpty(jobGroup) ? "DEFAULT" : jobName;
+        JobKey jobKey = JobKey.jobKey(jobName, jobGroup);
+        try {
+            // 删除Job前停用所有与之相关的触发器
+            List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
+            for (Trigger trigger : triggers) {
+                scheduler.pauseTrigger(trigger.getKey());
+            }
+            scheduler.deleteJob(jobKey);
+        } catch (SchedulerException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 修改CronTrigger的时间
+     */
+    @RequestMapping("/modifyTrigger")
+    public void modifyTrigger(@RequestParam String triggerName, String triggerGroup, @RequestParam String cronString) {
+        triggerGroup = StringUtils.isEmpty(triggerGroup) ? "DEFAULT" : triggerGroup;
+        try {
+            TriggerKey triggerKey = TriggerKey.triggerKey(triggerName, triggerGroup);
+            // 修改之前先停用当前trigger
+            scheduler.pauseTrigger(triggerKey);
+            CronTrigger cronTrigger = TriggerBuilder.newTrigger()
+                    .withIdentity(triggerKey)
+                    .withSchedule(CronScheduleBuilder.cronSchedule(cronString))
+                    .startNow()
+                    .build();
+            scheduler.rescheduleJob(triggerKey, cronTrigger);
         } catch (SchedulerException e) {
             e.printStackTrace();
         }
