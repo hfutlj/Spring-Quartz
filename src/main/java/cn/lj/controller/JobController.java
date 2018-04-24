@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 @Controller
 public class JobController {
@@ -171,7 +172,13 @@ public class JobController {
     public void resumeJob(String jobName, String jobGroup){
         jobGroup = StringUtils.isEmpty(jobGroup) ? "DEFAULT" : jobGroup;
         try {
-            scheduler.resumeJob(JobKey.jobKey(jobName, jobGroup));
+            // 直接使用resume会导致暂停时积累的任务被立即触发
+            // scheduler.resumeJob(JobKey.jobKey(jobName, jobGroup));
+            JobKey jobKey = JobKey.jobKey(jobName,jobGroup);
+            List<? extends Trigger> triggers = scheduler.getTriggersOfJob(jobKey);
+            for (Trigger trigger: triggers) {
+                scheduler.rescheduleJob(trigger.getKey(),trigger);
+            }
         } catch (SchedulerException e) {
             e.printStackTrace();
         }
